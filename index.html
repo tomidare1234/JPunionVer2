@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WJU-T</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            display: grid;
+            grid-template-columns: 75% 25%;
+            overflow: hidden;
+        }
+
+        .left-area {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: black;
+        }
+
+        main {
+            display: grid;
+            width: min(70vw, 70vh);
+            height: min(70vw, 70vh);
+            grid-template-columns: repeat(10, 1fr);
+            gap: 3px;
+            border: 2px solid gray;
+            padding: 2px;
+            box-sizing: border-box;
+        }
+
+        main div {
+            border: 2px solid gray;
+            aspect-ratio: 1 / 1;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .center-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%;
+            height: 90%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            word-break: break-word;
+            line-height: 1.1;
+            pointer-events: none;
+            user-select: none;
+            color: #fff;
+        }
+
+        .right-area {
+            border-left: 2px solid #444;
+            padding: 10px;
+            background: #f5f5f5;
+            overflow-y: auto;
+        }
+
+        .color-button {
+            height: 24px;
+            margin: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            border-radius: 4px;
+            min-width: 15ch;
+        }
+
+        .color-button.light {
+            color: #000;
+        }
+
+        h2 {
+            margin-top: 0;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="left-area">
+        <main></main>
+    </div>
+
+    <div class="right-area">
+        <h2>パレット</h2>
+        <div id="palette"></div>
+    </div>
+    <script src="const.js"></script>
+    <script>
+        let selectedColor = null;
+        const main = document.querySelector("main");
+        const palette = document.getElementById("palette");
+
+        const isLight = hex => parseInt(hex, 16) > 0xffffff / 2;
+
+        colors.forEach(([name, hex], index) => {
+            const btn = document.createElement("button");
+            btn.className = "color-button";
+            btn.style.background = "#" + hex;
+            btn.textContent = name;
+            if (isLight(hex)) {
+                btn.classList.add("light");
+            } else {
+                btn.style.color = "#fff";
+            }
+            btn.onclick = () => selectedColor = "#" + hex;
+            palette.appendChild(btn);
+        });
+        const cells = [];
+        for (let i = 0; i < 100; i++) {
+            const cell = document.createElement("div");
+            cell.dataset.index = i;
+            const text = document.createElement("span");
+            text.className = "center-text";
+            text.textContent = `${i % 10},${Math.floor(i / 10)}`;
+            cell.appendChild(text);
+            cell.onclick = () => {
+                if (selectedColor) {
+                    cell.style.background = selectedColor;
+                    const brightness = parseInt(selectedColor.substring(1), 16);
+                    text.style.color = brightness < 0x888888 ? "#fff" : "#000";
+                    const saved = JSON.parse(localStorage.getItem("cellColors") || "{}");
+                    saved[i] = selectedColor;
+                    localStorage.setItem("cellColors", JSON.stringify(saved));
+                }
+            };
+
+            main.appendChild(cell);
+            cells.push(cell);
+        }
+        function fitText(textEl) {
+            let size = 28;
+            const parent = textEl.parentElement;
+            while ((textEl.scrollWidth > parent.clientWidth ||
+                textEl.scrollHeight > parent.clientHeight) && size > 8) {
+                textEl.style.fontSize = (--size) + "px";
+            }
+        }
+        const highlightColor = "#ffd700";
+        [[7, 0], [5, 1], [2, 6], [9, 9]].forEach(([x, y]) => {
+            cells[y * 10 + x].style.border = `4px solid ${highlightColor}`;
+        });
+        function BT() {
+            Btargets.forEach(([x, y, label, colorIndex]) => {
+                const cell = cells[y * 10 + x];
+                const text = cell.children[0];
+                text.textContent = label;
+                fitText(text);
+
+                const bgColor = "#" + colors[colorIndex - 1][1];
+                cell.style.backgroundColor = bgColor;
+
+                const brightness = parseInt(bgColor.substring(1), 16);
+                text.style.color = brightness < 0x888888 ? "#fff" : "#000";
+            });
+        }
+        BT();
+        const savedColors = JSON.parse(localStorage.getItem("cellColors") || "{}");
+        Object.entries(savedColors).forEach(([index, color]) => {
+            const cell = cells[index];
+            if (cell) {
+                cell.style.background = color;
+                const text = cell.querySelector(".center-text");
+                const brightness = parseInt(color.substring(1), 16);
+                text.style.color = brightness < 0x888888 ? "#fff" : "#000";
+            }
+        });
+        const resetBtn = document.createElement("button");
+        resetBtn.textContent = "背景リセット";
+        resetBtn.className = "color-button light";
+        resetBtn.style.background = "#ffeb3b";
+        resetBtn.onclick = () => {
+            cells.forEach(cell => {
+                cell.style.background = "";
+                cell.querySelector(".center-text").style.color = "#fff";
+            });
+            BT();
+            localStorage.removeItem("cellColors");
+        };
+        palette.appendChild(resetBtn);
+
+        const colorResetBtn = document.createElement("button");
+        colorResetBtn.textContent = "色選択リセット";
+        colorResetBtn.className = "color-button light";
+        colorResetBtn.style.background = "#cccccc";
+        colorResetBtn.onclick = () => selectedColor = null;
+        palette.appendChild(colorResetBtn);
+    </script>
+
+</body>
+
+</html>
