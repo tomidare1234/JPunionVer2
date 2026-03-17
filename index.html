@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WJU-T - 共有・保存版</title>
+    <title>WJU-T - 共有・保存対応版</title>
     <style>
         body {
             margin: 0;
@@ -76,6 +76,7 @@
             border-radius: 5px;
             cursor: pointer;
             border: none;
+            font-weight: bold;
         }
         h2, h3 { margin: 10px 0; text-align: center; }
     </style>
@@ -104,11 +105,9 @@
         const palette = document.getElementById("palette");
         const cells = [];
 
-        // --- 1. 初期設定と描画 ---
-
         const isLight = hex => parseInt(hex, 16) > 0xffffff / 2;
 
-        // パレット作成
+        // 1. パレット生成
         colors.forEach(([name, hex]) => {
             const btn = document.createElement("button");
             btn.className = "color-button";
@@ -120,7 +119,7 @@
             palette.appendChild(btn);
         });
 
-        // グリッド作成
+        // 2. グリッド生成
         for (let i = 0; i < 100; i++) {
             const cell = document.createElement("div");
             const text = document.createElement("span");
@@ -131,22 +130,21 @@
             cell.onclick = () => {
                 if (selectedColor) {
                     applyColor(cell, selectedColor);
-                    saveToLocal();
+                    saveToLocal(); // 塗るたびに自動保存
                 }
             };
             main.appendChild(cell);
             cells.push(cell);
         }
 
-        // 色を適用する共通関数
         function applyColor(cell, color) {
             cell.style.background = color;
             const text = cell.querySelector(".center-text");
-            const brightness = parseInt(color.substring(1), 16);
+            const hex = color.replace('#', '');
+            const brightness = parseInt(hex, 16);
             text.style.color = brightness < 0x888888 ? "#fff" : "#000";
         }
 
-        // テキストサイズ自動調整
         function fitText(textEl) {
             let size = 20;
             const parent = textEl.parentElement;
@@ -156,7 +154,7 @@
             }
         }
 
-        // Btargets（デフォルト設定）の反映
+        // 初期配置（const.jsのデータ）を適用
         function applyBTargets() {
             Btargets.forEach(([x, y, label, colorIndex]) => {
                 const cell = cells[y * 10 + x];
@@ -168,9 +166,8 @@
             });
         }
 
-        // --- 2. 保存・共有機能 ---
+        // --- 保存・共有のコア機能 ---
 
-        // LocalStorageに現在の色状態だけを保存
         function saveToLocal() {
             const data = {};
             cells.forEach((cell, i) => {
@@ -178,58 +175,54 @@
                     data[i] = cell.style.background;
                 }
             });
-            localStorage.setItem("JPunion_save", JSON.stringify(data));
+            localStorage.setItem("JPunion_save_v2", JSON.stringify(data));
         }
 
-        // 共有URLを作成
         function copyShareURL() {
-            const currentData = localStorage.getItem("JPunion_save");
+            const currentData = localStorage.getItem("JPunion_save_v2");
             if (!currentData || currentData === "{}") {
                 alert("保存するデータがありません。");
                 return;
             }
-            // データをURL用に変換(Base64)
+            // データを圧縮してURLエンコード
             const encoded = btoa(unescape(encodeURIComponent(currentData)));
             const url = `${window.location.origin}${window.location.pathname}?d=${encoded}`;
             
             navigator.clipboard.writeText(url).then(() => {
-                alert("共有URLをコピーしました！\nこのURLをブックマークすればバックアップになります。");
+                alert("共有URLをコピーしました！このURLを開けば今の盤面が再現されます。");
             });
         }
 
-        // 読み込み処理
         function loadBoard() {
-            // 1. まずデフォルトを適用
-            applyBTargets();
+            applyBTargets(); // まず基本形
 
-            // 2. URLパラメータがあればそれを優先して読み込む
             const params = new URLSearchParams(window.location.search);
             const urlData = params.get('d');
 
+            // URLにデータがあれば優先して読み込む
             if (urlData) {
                 try {
                     const decoded = decodeURIComponent(escape(atob(urlData)));
-                    localStorage.setItem("JPunion_save", decoded);
-                    // URLを綺麗にする
+                    localStorage.setItem("JPunion_save_v2", decoded);
                     window.history.replaceState({}, "", window.location.pathname);
                 } catch (e) { console.error("URL読込失敗"); }
             }
 
-            // 3. LocalStorageから反映
-            const saved = JSON.parse(localStorage.getItem("JPunion_save") || "{}");
+            // ローカルストレージから復元
+            const saved = JSON.parse(localStorage.getItem("JPunion_save_v2") || "{}");
             Object.entries(saved).forEach(([index, color]) => {
                 if (cells[index]) applyColor(cells[index], color);
             });
         }
 
         function resetAll() {
-            if (confirm("すべての塗りつぶしを消去しますか？")) {
-                localStorage.removeItem("JPunion_save");
+            if (confirm("すべての塗りつぶしを消去して初期状態に戻しますか？")) {
+                localStorage.removeItem("JPunion_save_v2");
                 location.reload();
             }
         }
 
-        // 実行
+        // 起動時に読み込み
         loadBoard();
         
     </script>
