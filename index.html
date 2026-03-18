@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WJU-T - 共有・保存対応版</title>
+    <title>WJU-T - 拠点保護版</title>
     <style>
         body {
             margin: 0;
@@ -140,7 +140,6 @@
             <h3>データ管理</h3>
             <button class="btn-action" style="background: #28a745;" onclick="copyShareURL()">🔗 共有URLをコピー</button>
             <button class="btn-action" style="background: #dc3545;" onclick="resetAll()">⚠️ 全リセット</button>
-            <p style="font-size: 10px; color: #666; text-align: center;">Ctrl + Shift + S でスクショ</p>
         </div>
     </div>
 
@@ -150,8 +149,8 @@
         const main = document.querySelector("main");
         const palette = document.getElementById("palette");
         const cells = [];
+        const protectedCells = new Set(); // 保護されたマスのインデックスを保持
 
-        // ヘルパー関数
         const isLight = hex => parseInt(hex, 16) > 0xffffff / 2;
         const toHex = rgb => {
             if (rgb.startsWith("#")) return rgb;
@@ -183,6 +182,11 @@
             cell.textEl = text;
 
             cell.onclick = () => {
+                // 保護されているマスの場合は何もしない
+                if (protectedCells.has(i)) {
+                    console.log("このマスは保護されています");
+                    return;
+                }
                 if (!selectedColor) return;
                 applyColor(cell, selectedColor);
                 saveToLocal();
@@ -210,16 +214,24 @@
         }
 
         function applyBTargets() {
+            protectedCells.clear();
             Btargets.forEach(([x, y, label, colorIndex]) => {
-                const cell = cells[y * 10 + x];
+                const index = y * 10 + x;
+                const cell = cells[index];
+                
+                // 拠点を保護リストに追加
+                protectedCells.add(index);
+                
                 cell.textEl.textContent = label;
                 fitText(cell.textEl);
                 const bgColor = "#" + colors[colorIndex - 1][1];
                 applyColor(cell, bgColor);
+                
+                // 拠点だと分かりやすくするために枠線を少し太くする
+                cell.style.boxShadow = "inset 0 0 0 2px rgba(255,255,255,0.3)";
             });
         }
 
-        // リーダーボード更新
         function updateLeaderboard() {
             const lb = document.getElementById("leaderboard-content");
             const counts = {};
@@ -246,7 +258,7 @@
                     div.innerHTML = `
                         <span>
                             <span style="display:inline-block;width:12px;height:12px;background:${color};border:1px solid #000;margin-right:6px;"></span>
-                            ${[...data.labels].join(" / ") || "無所属"}
+                            ${[...data.labels].join(" / ") || "未所属"}
                         </span>
                         <span>${data.count} マス</span>
                     `;
@@ -254,14 +266,13 @@
                 });
         }
 
-        // --- 保存・共有・読込機能 ---
-
-        const STORAGE_KEY = "WJU_T_SaveData";
+        const STORAGE_KEY = "WJU_T_SaveData_V2";
 
         function saveToLocal() {
             const data = {};
             cells.forEach((cell, i) => {
-                if (cell.style.background) {
+                // 保護されていないマス（ユーザーが塗ったマス）だけ保存
+                if (!protectedCells.has(i) && cell.style.background) {
                     data[i] = toHex(cell.style.background);
                 }
             });
@@ -282,7 +293,7 @@
         }
 
         function loadBoard() {
-            applyBTargets(); // デフォルト配置
+            applyBTargets(); 
 
             const params = new URLSearchParams(window.location.search);
             const urlData = params.get('d');
@@ -296,43 +307,39 @@
 
             const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
             Object.entries(saved).forEach(([index, color]) => {
-                if (cells[index]) applyColor(cells[index], color);
+                const idx = parseInt(index);
+                // 保存データがあっても、そこが現在は拠点（保護）なら上書きしない
+                if (cells[idx] && !protectedCells.has(idx)) {
+                    applyColor(cells[idx], color);
+                }
             });
             updateLeaderboard();
         }
 
         function resetAll() {
-            if (confirm("すべての塗りつぶしを消去しますか？")) {
+            if (confirm("すべての塗りつぶしを消去しますか？（拠点は残ります）")) {
                 localStorage.removeItem(STORAGE_KEY);
                 location.reload();
             }
         }
 
-        // ショートカットキー設定
         document.addEventListener("keydown", async (e) => {
-            // Ctrl + Shift + S でスクリーンショット
             if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "s") {
                 e.preventDefault();
                 const rightArea = document.querySelector(".right-area");
-                rightArea.style.display = "none"; // パレットを隠す
-
+                rightArea.style.display = "none";
                 try {
                     const canvas = await html2canvas(document.body);
                     canvas.toBlob(async (blob) => {
-                        await navigator.clipboard.write([
-                            new ClipboardItem({ "image/png": blob })
-                        ]);
-                        alert("スクリーンショットをクリップボードにコピーしました！");
+                        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+                        alert("スクショをコピーしました！");
                     });
-                } catch (err) { console.error("失敗:", err); }
-
+                } catch (err) { console.error(err); }
                 rightArea.style.display = "block";
             }
         });
 
-        // 実行
         loadBoard();
-
     </script>
 </body>
 </html>
