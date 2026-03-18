@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WJU-T - 拠点保護版</title>
+    <title>WJU-T - リーダーボード保存版</title>
     <style>
         body {
             margin: 0;
@@ -132,14 +132,17 @@
             <h2>リーダーボード</h2>
             <div id="leaderboard-content"></div>
         </div>
-        <div id="palette">
-            <h2>パレット</h2>
-        </div>
 
-        <div class="control-panel">
-            <h3>データ管理</h3>
-            <button class="btn-action" style="background: #28a745;" onclick="copyShareURL()">🔗 共有URLをコピー</button>
-            <button class="btn-action" style="background: #dc3545;" onclick="resetAll()">⚠️ 全リセット</button>
+        <div id="hide-on-screenshot">
+            <div id="palette">
+                <h2>パレット</h2>
+            </div>
+
+            <div class="control-panel">
+                <h3>データ管理</h3>
+                <button class="btn-action" style="background: #28a745;" onclick="copyShareURL()">🔗 共有URLをコピー</button>
+                <button class="btn-action" style="background: #dc3545;" onclick="resetAll()">⚠️ 全リセット</button>
+            </div>
         </div>
     </div>
 
@@ -149,7 +152,7 @@
         const main = document.querySelector("main");
         const palette = document.getElementById("palette");
         const cells = [];
-        const protectedCells = new Set(); // 保護されたマスのインデックスを保持
+        const protectedCells = new Set();
 
         const isLight = hex => parseInt(hex, 16) > 0xffffff / 2;
         const toHex = rgb => {
@@ -159,7 +162,6 @@
             return "#" + match.slice(0, 3).map(x => ("0" + (+x).toString(16)).slice(-2)).join("");
         };
 
-        // 1. パレット生成
         colors.forEach(([name, hex]) => {
             const btn = document.createElement("button");
             btn.className = "color-button";
@@ -170,11 +172,9 @@
             palette.appendChild(btn);
         });
 
-        // 2. グリッド生成
         for (let i = 0; i < 100; i++) {
             const cell = document.createElement("div");
             cell.dataset.index = i;
-
             const text = document.createElement("span");
             text.className = "center-text";
             text.textContent = `${i % 10},${Math.floor(i / 10)}`;
@@ -182,17 +182,12 @@
             cell.textEl = text;
 
             cell.onclick = () => {
-                // 保護されているマスの場合は何もしない
-                if (protectedCells.has(i)) {
-                    console.log("このマスは保護されています");
-                    return;
-                }
+                if (protectedCells.has(i)) return;
                 if (!selectedColor) return;
                 applyColor(cell, selectedColor);
                 saveToLocal();
                 updateLeaderboard();
             };
-
             main.appendChild(cell);
             cells.push(cell);
         }
@@ -217,17 +212,12 @@
             protectedCells.clear();
             Btargets.forEach(([x, y, label, colorIndex]) => {
                 const index = y * 10 + x;
-                const cell = cells[index];
-                
-                // 拠点を保護リストに追加
                 protectedCells.add(index);
-                
+                const cell = cells[index];
                 cell.textEl.textContent = label;
                 fitText(cell.textEl);
                 const bgColor = "#" + colors[colorIndex - 1][1];
                 applyColor(cell, bgColor);
-                
-                // 拠点だと分かりやすくするために枠線を少し太くする
                 cell.style.boxShadow = "inset 0 0 0 2px rgba(255,255,255,0.3)";
             });
         }
@@ -235,35 +225,24 @@
         function updateLeaderboard() {
             const lb = document.getElementById("leaderboard-content");
             const counts = {};
-
             Btargets.forEach(([x, y, label, colorIndex]) => {
                 const color = "#" + colors[colorIndex - 1][1];
                 if (!counts[color]) counts[color] = { count: 0, labels: new Set() };
                 counts[color].labels.add(label);
             });
-
             cells.forEach(cell => {
                 if (!cell.style.background) return;
                 const hex = toHex(cell.style.background);
                 if (!counts[hex]) counts[hex] = { count: 0, labels: new Set() };
                 counts[hex].count++;
             });
-
             lb.innerHTML = "";
-            Object.entries(counts)
-                .sort((a, b) => b[1].count - a[1].count)
-                .forEach(([color, data]) => {
-                    const div = document.createElement("div");
-                    div.className = "leaderboard-entry";
-                    div.innerHTML = `
-                        <span>
-                            <span style="display:inline-block;width:12px;height:12px;background:${color};border:1px solid #000;margin-right:6px;"></span>
-                            ${[...data.labels].join(" / ") || "未所属"}
-                        </span>
-                        <span>${data.count} マス</span>
-                    `;
-                    lb.appendChild(div);
-                });
+            Object.entries(counts).sort((a, b) => b[1].count - a[1].count).forEach(([color, data]) => {
+                const div = document.createElement("div");
+                div.className = "leaderboard-entry";
+                div.innerHTML = `<span><span style="display:inline-block;width:12px;height:12px;background:${color};border:1px solid #000;margin-right:6px;"></span>${[...data.labels].join(" / ") || "未所属"}</span><span>${data.count} マス</span>`;
+                lb.appendChild(div);
+            });
         }
 
         const STORAGE_KEY = "WJU_T_SaveData_V2";
@@ -271,7 +250,6 @@
         function saveToLocal() {
             const data = {};
             cells.forEach((cell, i) => {
-                // 保護されていないマス（ユーザーが塗ったマス）だけ保存
                 if (!protectedCells.has(i) && cell.style.background) {
                     data[i] = toHex(cell.style.background);
                 }
@@ -287,14 +265,11 @@
             }
             const encoded = btoa(unescape(encodeURIComponent(currentData)));
             const url = `${window.location.origin}${window.location.pathname}?d=${encoded}`;
-            navigator.clipboard.writeText(url).then(() => {
-                alert("共有URLをコピーしました！");
-            });
+            navigator.clipboard.writeText(url).then(() => alert("共有URLをコピーしました！"));
         }
 
         function loadBoard() {
-            applyBTargets(); 
-
+            applyBTargets();
             const params = new URLSearchParams(window.location.search);
             const urlData = params.get('d');
             if (urlData) {
@@ -302,40 +277,41 @@
                     const decoded = decodeURIComponent(escape(atob(urlData)));
                     localStorage.setItem(STORAGE_KEY, decoded);
                     window.history.replaceState({}, "", window.location.pathname);
-                } catch (e) { console.error("URL読込失敗"); }
+                } catch (e) { console.error(e); }
             }
-
             const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
             Object.entries(saved).forEach(([index, color]) => {
                 const idx = parseInt(index);
-                // 保存データがあっても、そこが現在は拠点（保護）なら上書きしない
-                if (cells[idx] && !protectedCells.has(idx)) {
-                    applyColor(cells[idx], color);
-                }
+                if (cells[idx] && !protectedCells.has(idx)) applyColor(cells[idx], color);
             });
             updateLeaderboard();
         }
 
         function resetAll() {
-            if (confirm("すべての塗りつぶしを消去しますか？（拠点は残ります）")) {
+            if (confirm("すべての塗りつぶしを消去しますか？")) {
                 localStorage.removeItem(STORAGE_KEY);
                 location.reload();
             }
         }
 
+        // --- スクショ機能の修正 ---
         document.addEventListener("keydown", async (e) => {
             if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "s") {
                 e.preventDefault();
-                const rightArea = document.querySelector(".right-area");
-                rightArea.style.display = "none";
+                
+                // パレットと管理ボタンだけを隠す
+                const hideArea = document.getElementById("hide-on-screenshot");
+                hideArea.style.display = "none";
+
                 try {
                     const canvas = await html2canvas(document.body);
                     canvas.toBlob(async (blob) => {
                         await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-                        alert("スクショをコピーしました！");
+                        alert("リーダーボードを含めてスクショをコピーしました！");
                     });
                 } catch (err) { console.error(err); }
-                rightArea.style.display = "block";
+
+                hideArea.style.display = "block"; // 元に戻す
             }
         });
 
