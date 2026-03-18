@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,12 +14,14 @@
             overflow: hidden;
             font-family: sans-serif;
         }
+
         .left-area {
             display: flex;
             justify-content: center;
             align-items: center;
             background-color: black;
         }
+
         main {
             display: grid;
             width: min(70vw, 70vh);
@@ -29,28 +32,40 @@
             padding: 2px;
             box-sizing: border-box;
         }
+
         main div {
             border: 2px solid gray;
             aspect-ratio: 1 / 1;
             position: relative;
             cursor: pointer;
         }
+
         .center-text {
             position: absolute;
-            top: 50%; left: 50%;
+            top: 50%;
+            left: 50%;
             transform: translate(-50%, -50%);
-            width: 90%; height: 90%;
-            display: flex; justify-content: center; align-items: center;
-            text-align: center; word-break: break-word;
-            line-height: 1.1; pointer-events: none; user-select: none;
-            color: #fff; font-size: 10px;
+            width: 90%;
+            height: 90%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            word-break: break-word;
+            line-height: 1.1;
+            pointer-events: none;
+            user-select: none;
+            color: #fff;
+            font-size: 10px;
         }
+
         .right-area {
             border-left: 2px solid #444;
             padding: 10px;
             background: #f5f5f5;
             overflow-y: auto;
         }
+
         .color-button {
             width: 100%;
             height: 30px;
@@ -61,12 +76,37 @@
             font-weight: bold;
             border-radius: 4px;
         }
-        .color-button.light { color: #000; }
+
+        .color-button.light {
+            color: #000;
+        }
+
+        h2, h3 {
+            margin: 10px 0;
+            text-align: center;
+        }
+
+        .leaderboard {
+            border-bottom: 2px solid #444;
+            padding: 10px;
+            background: #fafafa;
+            margin-bottom: 10px;
+        }
+
+        .leaderboard-entry {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            border-bottom: 1px solid #ddd;
+            font-size: 12px;
+        }
+
         .control-panel {
             margin-top: 20px;
             padding-top: 10px;
             border-top: 2px solid #ccc;
         }
+
         .btn-action {
             background: #444;
             color: white;
@@ -78,34 +118,47 @@
             border: none;
             font-weight: bold;
         }
-        h2, h3 { margin: 10px 0; text-align: center; }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
+
 <body>
 
     <div class="left-area">
-        <main id="grid-main"></main>
+        <main></main>
     </div>
-
     <div class="right-area">
-        <h2>パレット</h2>
-        <div id="palette"></div>
+        <div class="leaderboard" id="leaderboard">
+            <h2>リーダーボード</h2>
+            <div id="leaderboard-content"></div>
+        </div>
+        <div id="palette">
+            <h2>パレット</h2>
+        </div>
 
         <div class="control-panel">
             <h3>データ管理</h3>
             <button class="btn-action" style="background: #28a745;" onclick="copyShareURL()">🔗 共有URLをコピー</button>
             <button class="btn-action" style="background: #dc3545;" onclick="resetAll()">⚠️ 全リセット</button>
+            <p style="font-size: 10px; color: #666; text-align: center;">Ctrl + Shift + S でスクショ</p>
         </div>
     </div>
 
     <script src="const.js"></script>
     <script>
         let selectedColor = null;
-        const main = document.getElementById("grid-main");
+        const main = document.querySelector("main");
         const palette = document.getElementById("palette");
         const cells = [];
 
+        // ヘルパー関数
         const isLight = hex => parseInt(hex, 16) > 0xffffff / 2;
+        const toHex = rgb => {
+            if (rgb.startsWith("#")) return rgb;
+            const match = rgb.match(/\d+/g);
+            if (!match) return "#000000";
+            return "#" + match.slice(0, 3).map(x => ("0" + (+x).toString(16)).slice(-2)).join("");
+        };
 
         // 1. パレット生成
         colors.forEach(([name, hex]) => {
@@ -113,8 +166,7 @@
             btn.className = "color-button";
             btn.style.background = "#" + hex;
             btn.textContent = name;
-            if (isLight(hex)) btn.classList.add("light");
-            else btn.style.color = "#fff";
+            btn.style.color = isLight(hex) ? "#000" : "#fff";
             btn.onclick = () => selectedColor = "#" + hex;
             palette.appendChild(btn);
         });
@@ -122,109 +174,165 @@
         // 2. グリッド生成
         for (let i = 0; i < 100; i++) {
             const cell = document.createElement("div");
+            cell.dataset.index = i;
+
             const text = document.createElement("span");
             text.className = "center-text";
             text.textContent = `${i % 10},${Math.floor(i / 10)}`;
             cell.appendChild(text);
-            
+            cell.textEl = text;
+
             cell.onclick = () => {
-                if (selectedColor) {
-                    applyColor(cell, selectedColor);
-                    saveToLocal(); // 塗るたびに自動保存
-                }
+                if (!selectedColor) return;
+                applyColor(cell, selectedColor);
+                saveToLocal();
+                updateLeaderboard();
             };
+
             main.appendChild(cell);
             cells.push(cell);
         }
 
         function applyColor(cell, color) {
             cell.style.background = color;
-            const text = cell.querySelector(".center-text");
-            const hex = color.replace('#', '');
+            const hex = toHex(color).replace('#', '');
             const brightness = parseInt(hex, 16);
-            text.style.color = brightness < 0x888888 ? "#fff" : "#000";
+            cell.textEl.style.color = brightness < 0x888888 ? "#fff" : "#000";
         }
 
         function fitText(textEl) {
-            let size = 20;
+            let size = 28;
             const parent = textEl.parentElement;
             textEl.style.fontSize = size + "px";
-            while ((textEl.scrollWidth > parent.clientWidth || textEl.scrollHeight > parent.clientHeight) && size > 6) {
+            while ((textEl.scrollWidth > parent.clientWidth || textEl.scrollHeight > parent.clientHeight) && size > 8) {
                 textEl.style.fontSize = (--size) + "px";
             }
         }
 
-        // 初期配置（const.jsのデータ）を適用
         function applyBTargets() {
             Btargets.forEach(([x, y, label, colorIndex]) => {
                 const cell = cells[y * 10 + x];
-                const text = cell.querySelector(".center-text");
-                text.textContent = label;
+                cell.textEl.textContent = label;
+                fitText(cell.textEl);
                 const bgColor = "#" + colors[colorIndex - 1][1];
                 applyColor(cell, bgColor);
-                fitText(text);
             });
         }
 
-        // --- 保存・共有のコア機能 ---
+        // リーダーボード更新
+        function updateLeaderboard() {
+            const lb = document.getElementById("leaderboard-content");
+            const counts = {};
+
+            Btargets.forEach(([x, y, label, colorIndex]) => {
+                const color = "#" + colors[colorIndex - 1][1];
+                if (!counts[color]) counts[color] = { count: 0, labels: new Set() };
+                counts[color].labels.add(label);
+            });
+
+            cells.forEach(cell => {
+                if (!cell.style.background) return;
+                const hex = toHex(cell.style.background);
+                if (!counts[hex]) counts[hex] = { count: 0, labels: new Set() };
+                counts[hex].count++;
+            });
+
+            lb.innerHTML = "";
+            Object.entries(counts)
+                .sort((a, b) => b[1].count - a[1].count)
+                .forEach(([color, data]) => {
+                    const div = document.createElement("div");
+                    div.className = "leaderboard-entry";
+                    div.innerHTML = `
+                        <span>
+                            <span style="display:inline-block;width:12px;height:12px;background:${color};border:1px solid #000;margin-right:6px;"></span>
+                            ${[...data.labels].join(" / ") || "無所属"}
+                        </span>
+                        <span>${data.count} マス</span>
+                    `;
+                    lb.appendChild(div);
+                });
+        }
+
+        // --- 保存・共有・読込機能 ---
+
+        const STORAGE_KEY = "WJU_T_SaveData";
 
         function saveToLocal() {
             const data = {};
             cells.forEach((cell, i) => {
                 if (cell.style.background) {
-                    data[i] = cell.style.background;
+                    data[i] = toHex(cell.style.background);
                 }
             });
-            localStorage.setItem("JPunion_save_v2", JSON.stringify(data));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         }
 
         function copyShareURL() {
-            const currentData = localStorage.getItem("JPunion_save_v2");
+            const currentData = localStorage.getItem(STORAGE_KEY);
             if (!currentData || currentData === "{}") {
                 alert("保存するデータがありません。");
                 return;
             }
-            // データを圧縮してURLエンコード
             const encoded = btoa(unescape(encodeURIComponent(currentData)));
             const url = `${window.location.origin}${window.location.pathname}?d=${encoded}`;
-            
             navigator.clipboard.writeText(url).then(() => {
-                alert("共有URLをコピーしました！このURLを開けば今の盤面が再現されます。");
+                alert("共有URLをコピーしました！");
             });
         }
 
         function loadBoard() {
-            applyBTargets(); // まず基本形
+            applyBTargets(); // デフォルト配置
 
             const params = new URLSearchParams(window.location.search);
             const urlData = params.get('d');
-
-            // URLにデータがあれば優先して読み込む
             if (urlData) {
                 try {
                     const decoded = decodeURIComponent(escape(atob(urlData)));
-                    localStorage.setItem("JPunion_save_v2", decoded);
+                    localStorage.setItem(STORAGE_KEY, decoded);
                     window.history.replaceState({}, "", window.location.pathname);
                 } catch (e) { console.error("URL読込失敗"); }
             }
 
-            // ローカルストレージから復元
-            const saved = JSON.parse(localStorage.getItem("JPunion_save_v2") || "{}");
+            const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
             Object.entries(saved).forEach(([index, color]) => {
                 if (cells[index]) applyColor(cells[index], color);
             });
+            updateLeaderboard();
         }
 
         function resetAll() {
-            if (confirm("すべての塗りつぶしを消去して初期状態に戻しますか？")) {
-                localStorage.removeItem("JPunion_save_v2");
+            if (confirm("すべての塗りつぶしを消去しますか？")) {
+                localStorage.removeItem(STORAGE_KEY);
                 location.reload();
             }
         }
 
-        // 起動時に読み込み
+        // ショートカットキー設定
+        document.addEventListener("keydown", async (e) => {
+            // Ctrl + Shift + S でスクリーンショット
+            if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "s") {
+                e.preventDefault();
+                const rightArea = document.querySelector(".right-area");
+                rightArea.style.display = "none"; // パレットを隠す
+
+                try {
+                    const canvas = await html2canvas(document.body);
+                    canvas.toBlob(async (blob) => {
+                        await navigator.clipboard.write([
+                            new ClipboardItem({ "image/png": blob })
+                        ]);
+                        alert("スクリーンショットをクリップボードにコピーしました！");
+                    });
+                } catch (err) { console.error("失敗:", err); }
+
+                rightArea.style.display = "block";
+            }
+        });
+
+        // 実行
         loadBoard();
-        
+
     </script>
 </body>
 </html>
